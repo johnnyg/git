@@ -3002,7 +3002,7 @@ static int do_merge(struct commit *commit, const char *arg, int arg_len,
 		argv_array_push(&cmd.args, "--no-log");
 		argv_array_push(&cmd.args, "--no-stat");
 		argv_array_push(&cmd.args, "-F");
-		argv_array_push(&cmd.args, git_path_merge_msg());
+		argv_array_push(&cmd.args, git_path_merge_msg(the_repository));
 		if (opts->gpg_sign)
 			argv_array_push(&cmd.args, opts->gpg_sign);
 
@@ -3012,7 +3012,7 @@ static int do_merge(struct commit *commit, const char *arg, int arg_len,
 					oid_to_hex(&j->item->object.oid));
 
 		strbuf_release(&ref_name);
-		unlink(git_path_cherry_pick_head());
+		unlink(git_path_cherry_pick_head(the_repository));
 		rollback_lock_file(&lock);
 
 		rollback_lock_file(&lock);
