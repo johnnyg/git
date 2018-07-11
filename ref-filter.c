@@ -1461,7 +1461,8 @@ static const char *get_refname(struct used_atom *atom, struct ref_array_item *re
 static int get_object(struct ref_array_item *ref, int deref, struct object **obj,
 		      struct expand_data *oi, struct strbuf *err)
 {
-	int eaten;
+	int eaten = 0;
+
 	if (oi->info.contentp) {
 		/* We need to know that to use parse_object_buffer properly */
 		oi->info.sizep = &oi->size;
