@@ -1126,7 +1126,7 @@ class LargeFileSystem(object):
         self.largeFiles = set()
         self.writeToGitStream = writeToGitStream
 
-    def generatePointer(self, cloneDestination, contentFile):
+    def generatePointer(self, contentFile, relPath, p4File):
         """Return the content of a pointer file that is stored in Git instead of
            the actual content."""
         assert False, "Method 'generatePointer' required in " + self.__class__.__name__
@@ -1180,13 +1180,13 @@ class LargeFileSystem(object):
     def isLargeFile(self, relPath):
         return relPath in self.largeFiles
 
-    def processContent(self, git_mode, relPath, contents):
+    def processContent(self, git_mode, relPath, p4File, contents):
         """Processes the content of git fast import. This method decides if a
            file is stored in the large file system and handles all necessary
            steps."""
         if self.hasLargeFileExtension(relPath) or self.exceedsLargeFileThreshold(relPath, contents):
             contentTempFile = self.generateTempFile(contents)
-            (pointer_git_mode, contents, localLargeFile) = self.generatePointer(contentTempFile)
+            (pointer_git_mode, contents, localLargeFile) = self.generatePointer(contentTempFile, relPath, p4File)
             if pointer_git_mode:
                 git_mode = pointer_git_mode
             if localLargeFile:
@@ -1205,7 +1205,7 @@ class LargeFileSystem(object):
 class MockLFS(LargeFileSystem):
     """Mock large file system for testing."""
 
-    def generatePointer(self, contentFile):
+    def generatePointer(self, contentFile, relPath, p4File):
         """The pointer content is the original content prefixed with "pointer-".
            The local filename of the large file storage is derived from the file content.
            """
@@ -1233,7 +1233,7 @@ class GitLFS(LargeFileSystem):
         LargeFileSystem.__init__(self, *args)
         self.baseGitAttributes = []
 
-    def generatePointer(self, contentFile):
+    def generatePointer(self, contentFile, relPath, p4File):
         """Generate a Git LFS pointer for the content. Return LFS Pointer file
            mode and content which is stored in the Git repository instead of
            the actual content. Return also the new location of the actual
@@ -1300,12 +1300,12 @@ class GitLFS(LargeFileSystem):
         LargeFileSystem.removeLargeFile(self, relPath)
         self.writeToGitStream('100644', '.gitattributes', self.generateGitAttributes())
 
-    def processContent(self, git_mode, relPath, contents):
+    def processContent(self, git_mode, relPath, p4File, contents):
         if relPath == '.gitattributes':
             self.baseGitAttributes = contents
             return (git_mode, self.generateGitAttributes())
         else:
-            return LargeFileSystem.processContent(self, git_mode, relPath, contents)
+            return LargeFileSystem.processContent(self, git_mode, relPath, p4File, contents)
 
 class Command:
     delete_actions = ( "delete", "move/delete", "purge" )
@@ -2841,7 +2841,7 @@ class P4Sync(Command, P4UserMap):
             contents = [ text ]
 
         if self.largeFileSystem:
-            (git_mode, contents) = self.largeFileSystem.processContent(git_mode, relPath, contents)
+            (git_mode, contents) = self.largeFileSystem.processContent(git_mode, relPath, file, contents)
 
         self.writeToGitStream(git_mode, relPath, contents)
 
