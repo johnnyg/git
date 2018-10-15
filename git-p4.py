@@ -1307,6 +1307,53 @@ class GitLFS(LargeFileSystem):
         else:
             return LargeFileSystem.processContent(self, git_mode, relPath, p4File, contents)
 
+class GitAnnex(LargeFileSystem):
+    def __init__(self, *args, **kwargs):
+        LargeFileSystem.__init__(self, *args, **kwargs)
+        version = None
+        for line in subprocess.check_output(['git', 'annex', 'version']).split('\n'):
+            if line.startswith('local repository version: '):
+                version = int(line.partition(':')[2])
+        if version is None:
+            die("Need to run git annex init first")
+        if version < 6:
+            self.generatePointer = self.generateSymlink
+
+    def command(self, *args):
+        args = ['git', 'annex'] + list(args)
+        try:
+            with open(os.devnull, 'w') as devnull:
+                output = subprocess.check_output(args, stderr=devnull)
+        except subprocess.CalledProcessError:
+            die("Failed to add file to git annex")
+        return output
+
+    def ingest(self, contentFile, relPath, p4File):
+        _, ext = os.path.splitext(relPath)
+        key = self.command('calckey', contentFile).strip()
+        # Make sure extension is correct
+        key = os.path.splitext(key)[0] + ext
+        self.command('setkey', key, contentFile)
+        tag = "p4-path={file[depotFile]}#{file[rev]}".format(file=p4File)
+        self.command('metadata', '--key', key, '--set', tag)
+        return key
+
+    def generateSymlink(self, contentFile, relPath, p4File):
+        key = self.ingest(contentFile, relPath, p4File)
+        try:
+            localLargeFile = self.command('contentlocation', key).strip()
+        except subprocess.CalledProcessError:
+            die("Failed to add file to git annex")
+        return ('120000', os.path.relpath(localLargeFile, start=os.path.dirname(relPath)), None)
+
+    def generatePointer(self, contentFile, relPath, p4File):
+        key = self.ingest(contentFile, relPath, p4File)
+        contents = "/annex/objects/{key}\n".format(key=key)
+        return ('100644', contents, None)
+
+    def pushFile(self, localLargeFile):
+        pass
+
 class Command:
     delete_actions = ( "delete", "move/delete", "purge" )
     add_actions = ( "add", "branch", "move/add" )
